@@ -40,7 +40,7 @@ flowchart LR
     REPO[(Repository: SQLite)]
   end
 
-  CLI -->|HTTP (JWT)| HTTP
+  CLI -->|HTTP + JWT| HTTP
   VAULT -- key --> CLI
   MODELS --- CLI
   MODELS --- HTTP
