@@ -9,10 +9,11 @@ import (
 )
 
 func TestUsersAndRecords(t *testing.T) {
-	repo, err := New("file:repo_users_records?mode=memory&cache=shared")
+	repo, err := New("file:repo_users_records?mode=memory&cache=shared&_journal=WAL")
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = repo.Close() })
 	ctx := context.Background()
 	user, err := repo.CreateUser(ctx, "u@example.com", []byte("h"))
 	if err != nil {
@@ -46,10 +47,11 @@ func TestUsersAndRecords(t *testing.T) {
 }
 
 func TestRefreshTokensAndConditional(t *testing.T) {
-	repo, err := New("file:repo_refresh_conditional?mode=memory&cache=shared")
+	repo, err := New("file:repo_refresh_conditional?mode=memory&cache=shared&_journal=WAL")
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = repo.Close() })
 	ctx := context.Background()
 	user, err := repo.CreateUser(ctx, "u2@example.com", []byte("h"))
 	if err != nil {

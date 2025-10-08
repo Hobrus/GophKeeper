@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/http"
 	"os/signal"
@@ -19,6 +20,7 @@ type App struct {
 	buildDate string
 	logger    *log.Logger
 	server    *http.Server
+	repoClose io.Closer
 }
 
 func New(version, buildDate string, logger *log.Logger) (*App, error) {
@@ -37,12 +39,13 @@ func New(version, buildDate string, logger *log.Logger) (*App, error) {
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	return &App{version: version, buildDate: buildDate, logger: logger, server: server}, nil
+	return &App{version: version, buildDate: buildDate, logger: logger, server: server, repoClose: repo}, nil
 }
 
 func (a *App) Run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	defer func() { _ = a.repoClose.Close() }()
 
 	go func() {
 		if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

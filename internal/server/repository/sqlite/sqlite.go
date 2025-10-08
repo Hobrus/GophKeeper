@@ -18,39 +18,106 @@ type Repository struct {
 	db *sql.DB
 }
 
+type migration struct {
+	id   int
+	name string
+	up   string
+}
+
+var schemaMigrations = []migration{
+	{
+		id:   1,
+		name: "init",
+		up: `
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash BLOB NOT NULL,
+                created_at TIMESTAMP NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS records (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                type TEXT NOT NULL,
+                meta BLOB NOT NULL,
+                payload BLOB NOT NULL,
+                version INTEGER NOT NULL,
+                updated_at TIMESTAMP NOT NULL,
+                FOREIGN KEY(owner_id) REFERENCES users(id)
+            );
+            CREATE TABLE IF NOT EXISTS refresh_tokens (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_records_owner_updated ON records(owner_id, updated_at);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
+        `,
+	},
+}
+
+func runMigrations(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, `PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TIMESTAMP NOT NULL)`); err != nil {
+		return err
+	}
+	applied := map[int]bool{}
+	rows, err := db.QueryContext(ctx, `SELECT id FROM schema_migrations`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		applied[id] = true
+	}
+	for _, m := range schemaMigrations {
+		if applied[m.id] {
+			continue
+		}
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, m.up); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations(id, name, applied_at) VALUES(?,?,?)`, m.id, m.name, time.Now().UTC()); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func New(dsn string) (*Repository, error) {
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS users (
-			id TEXT PRIMARY KEY,
-			email TEXT UNIQUE NOT NULL,
-			password_hash BLOB NOT NULL,
-			created_at TIMESTAMP NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS records (
-			id TEXT PRIMARY KEY,
-			owner_id TEXT NOT NULL,
-			type TEXT NOT NULL,
-			meta BLOB NOT NULL,
-			payload BLOB NOT NULL,
-			version INTEGER NOT NULL,
-			updated_at TIMESTAMP NOT NULL,
-			FOREIGN KEY(owner_id) REFERENCES users(id)
-		);
-        CREATE TABLE IF NOT EXISTS refresh_tokens (
-            token TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            expires_at TIMESTAMP NOT NULL,
-            created_at TIMESTAMP NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        );
-	`); err != nil {
+	// SQLite: keep a single writer connection to reduce lock contention
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	if err := runMigrations(context.Background(), db); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 	return &Repository{db: db}, nil
+}
+
+func (r *Repository) Close() error {
+	return r.db.Close()
 }
 
 // Auth
