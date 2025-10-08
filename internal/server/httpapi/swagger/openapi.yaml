@@ -115,6 +115,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Record'
+        '413':
+          description: Request entity too large
         '412':
           description: Version conflict
   /api/v1/records/{id}:
@@ -189,11 +191,16 @@ components:
         payload:
           type: string
           format: byte
+          description: Base64; max size is limited by server config
         version:
           type: integer
         updated_at:
           type: string
           format: date-time
+
+  x-limits:
+    max_request_bytes: configurable via env GOPHKEEPER_MAX_REQUEST_BYTES (default 1048576)
+    max_record_payload_bytes: configurable via env GOPHKEEPER_MAX_RECORD_PAYLOAD_BYTES (default 1048576)
 
 
 

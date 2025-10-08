@@ -11,12 +11,13 @@ import (
 )
 
 type Router struct {
-	services *service.Services
-	logger   *log.Logger
+	services        *service.Services
+	logger          *log.Logger
+	maxRequestBytes int64
 }
 
-func NewRouter(services *service.Services, logger *log.Logger) http.Handler {
-	r := &Router{services: services, logger: logger}
+func NewRouter(services *service.Services, logger *log.Logger, maxRequestBytes int64) http.Handler {
+	r := &Router{services: services, logger: logger, maxRequestBytes: maxRequestBytes}
 	mux := chi.NewRouter()
 
 	mux.Get("/health", r.handleHealth)

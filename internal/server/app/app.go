@@ -30,7 +30,7 @@ func New(version, buildDate string, logger *log.Logger) (*App, error) {
 		return nil, err
 	}
 	services := service.NewServices(repo, cfg)
-	router := httpapi.NewRouter(services, logger)
+	router := httpapi.NewRouter(services, logger, cfg.MaxRequestBytes)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,

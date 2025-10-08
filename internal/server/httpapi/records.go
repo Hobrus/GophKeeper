@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -35,8 +36,27 @@ func (r *Router) handleGetRecord(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) handleUpsertRecord(w http.ResponseWriter, req *http.Request) {
 	userID := getUserID(req.Context())
+	// Limit request body size to protect server from oversized payloads
+	if r.maxRequestBytes > 0 {
+		req.Body = http.MaxBytesReader(w, req.Body, r.maxRequestBytes)
+	}
 	var body models.Record
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+	dec := json.NewDecoder(req.Body)
+	if err := dec.Decode(&body); err != nil {
+		if errors.Is(err, io.EOF) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "empty body"})
+			return
+		}
+		// http.MaxBytesReader triggers this error type
+		var syntaxErr *json.SyntaxError
+		if errors.Is(err, http.ErrBodyReadAfterClose) || errors.Is(err, io.ErrUnexpectedEOF) || errors.As(err, &syntaxErr) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		if err.Error() == "http: request body too large" {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "request entity too large"})
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}

@@ -18,8 +18,8 @@ func newTestServer(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatalf("repo: %v", err)
 	}
-	svcs := service.NewServices(repo, config.Config{JWTSecret: "test"})
-	return NewRouter(svcs, nil)
+	svcs := service.NewServices(repo, config.Config{JWTSecret: "test", MaxRequestBytes: 1 << 20, MaxRecordPayloadBytes: 1 << 20})
+	return NewRouter(svcs, nil, 1<<20)
 }
 
 func doJSON(t *testing.T, ts http.Handler, method, path string, body any, headers map[string]string) *httptest.ResponseRecorder {

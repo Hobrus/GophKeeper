@@ -52,8 +52,8 @@ func TestNotFoundHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svcs := service.NewServices(repo, config.Config{JWTSecret: "test"})
-	ts := NewRouter(svcs, nil)
+	svcs := service.NewServices(repo, config.Config{JWTSecret: "test", MaxRequestBytes: 1 << 20, MaxRecordPayloadBytes: 1 << 20})
+	ts := NewRouter(svcs, nil, 1<<20)
 	// Register and login to get token
 	rr := doJSON(t, ts, "POST", "/api/v1/auth/register", map[string]string{"email": "nf@example.com", "password": "p"}, nil)
 	if rr.Code != http.StatusCreated {

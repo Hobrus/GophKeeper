@@ -35,7 +35,7 @@ type Services struct {
 func NewServices(repo Repository, cfg config.Config) *Services {
 	return &Services{
 		Auth:    &AuthService{repo: repo, jwtSecret: []byte(cfg.JWTSecret)},
-		Records: &RecordsService{repo: repo},
+		Records: &RecordsService{repo: repo, maxPayloadBytes: cfg.MaxRecordPayloadBytes},
 	}
 }
 
@@ -128,7 +128,8 @@ func (a *AuthService) Refresh(ctx context.Context, refreshToken string) (string,
 // RecordsService stores opaque, client-encrypted payloads with optional
 // optimistic concurrency control based on monotonically increasing version.
 type RecordsService struct {
-	repo Repository
+	repo            Repository
+	maxPayloadBytes int64
 }
 
 func (s *RecordsService) Upsert(ctx context.Context, rec models.Record) (models.Record, error) {
@@ -140,6 +141,9 @@ func (s *RecordsService) Upsert(ctx context.Context, rec models.Record) (models.
 	}
 	if rec.Meta == nil {
 		rec.Meta = map[string]string{}
+	}
+	if s.maxPayloadBytes > 0 && int64(len(rec.Payload)) > s.maxPayloadBytes {
+		return models.Record{}, errors.New("payload too large")
 	}
 	return s.repo.UpsertRecord(ctx, rec)
 }
@@ -153,6 +157,9 @@ func (s *RecordsService) UpsertConditional(ctx context.Context, rec models.Recor
 	}
 	if rec.Meta == nil {
 		rec.Meta = map[string]string{}
+	}
+	if s.maxPayloadBytes > 0 && int64(len(rec.Payload)) > s.maxPayloadBytes {
+		return models.Record{}, errors.New("payload too large")
 	}
 	return s.repo.UpsertRecordConditional(ctx, rec, expectedVersion)
 }
