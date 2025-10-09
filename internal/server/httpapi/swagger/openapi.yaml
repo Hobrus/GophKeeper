@@ -1,0 +1,207 @@
+openapi: 3.0.3
+info:
+  title: GophKeeper API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/v1/auth/register:
+    post:
+      summary: Register user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+  /api/v1/auth/login:
+    post:
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: New access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+  /api/v1/records:
+    get:
+      summary: List records
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: List of records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Record'
+    post:
+      summary: Create or update record
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: header
+          name: If-Match
+          schema:
+            type: string
+          required: false
+          description: Expected current version for optimistic concurrency
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Record'
+      responses:
+        '200':
+          description: Stored record
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Record'
+        '413':
+          description: Request entity too large
+        '412':
+          description: Version conflict
+  /api/v1/records/{id}:
+    get:
+      summary: Get record by id
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Record'
+        '404':
+          description: Not found
+    delete:
+      summary: Delete record by id
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+    Record:
+      type: object
+      properties:
+        id:
+          type: string
+        owner_id:
+          type: string
+        type:
+          type: string
+          enum: [login, text, binary, bank_card]
+        meta:
+          type: object
+          additionalProperties:
+            type: string
+        payload:
+          type: string
+          format: byte
+          description: Base64; max size is limited by server config
+        version:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+
+  x-limits:
+    max_request_bytes: configurable via env GOPHKEEPER_MAX_REQUEST_BYTES (default 1048576)
+    max_record_payload_bytes: configurable via env GOPHKEEPER_MAX_RECORD_PAYLOAD_BYTES (default 1048576)
+
+
+
+
